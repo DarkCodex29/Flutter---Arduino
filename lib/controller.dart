@@ -39,7 +39,7 @@ class QuizController extends GetxController {
     super.onInit();
     requestPermissions();
     loadQuestions();
-    initializeBondedDevices(); // Carga dispositivos emparejados
+    initializeBondedDevices(); // Cargar dispositivos emparejados
   }
 
   // ----------------------------
@@ -47,15 +47,12 @@ class QuizController extends GetxController {
   // ----------------------------
   Future<void> loadQuestions() async {
     try {
-      // Leer el archivo JSON desde los assets
       final String response =
           await rootBundle.loadString('assets/questions.json');
       final data = json.decode(response);
-
-      // Asignar las preguntas al atributo 'questions'
       questions = data;
       isQuestionsLoaded.value = true;
-      log("Preguntas cargadas correctamente desde el archivo JSON.");
+      log("Preguntas cargadas correctamente.");
     } catch (e) {
       log("Error al cargar preguntas: $e");
       isQuestionsLoaded.value = false;
@@ -82,30 +79,38 @@ class QuizController extends GetxController {
       timeLeft.value = initialTime;
       isWaitingResponse.value = false;
       selectedAnswer.value = "";
-      log("Pasando a la siguiente pregunta. Turno del equipo ${currentTeam.value}");
+      log("Pasando a la siguiente pregunta.");
     } else {
       timer?.cancel();
-      if (onGameFinished != null) onGameFinished();
+      isPaused.value = true;
       log("Juego terminado.");
+      if (onGameFinished != null) onGameFinished();
     }
   }
 
-  void checkAnswer(String answer, Function onShowModal) {
+  Future<void> checkAnswer(
+      String answer, Function onShowModal, Function onGameFinished) async {
     if (isPaused.value) return;
 
     selectedAnswer.value = answer;
+    isPaused.value = true;
     isWaitingResponse.value = true;
 
-    // Comparar la respuesta seleccionada con la correcta
-    bool isCorrect = questions[currentQuestionIndex.value]["answer"] == answer;
+    onShowModal();
+
+    final isCorrect = await sendDataToArduinoAndValidate(answer);
+
     if (isCorrect) {
       currentTeam.value == "A" ? scoreA.value++ : scoreB.value++;
-      log("Respuesta correcta para el equipo ${currentTeam.value}.");
+      log("Respuesta correcta.");
     } else {
-      log("Respuesta incorrecta para el equipo ${currentTeam.value}.");
+      log("Respuesta incorrecta.");
     }
 
-    sendDataToHC05(isCorrect ? "Correcto" : "Incorrecto");
+    isPaused.value = false;
+    isWaitingResponse.value = false;
+
+    nextQuestion(onGameFinished: onGameFinished);
   }
 
   // ----------------------------
@@ -127,7 +132,6 @@ class QuizController extends GetxController {
     if (!isConnected.value) {
       Get.snackbar("Advertencia",
           "Debe conectarse a un dispositivo Bluetooth para iniciar el juego.");
-      log("Intento de iniciar sin conexión Bluetooth.");
       return;
     }
     isPaused.value = !isPaused.value;
@@ -140,7 +144,7 @@ class QuizController extends GetxController {
   }
 
   // ----------------------------
-  // Bluetooth - Emparejados y Escaneo
+  // Bluetooth
   // ----------------------------
   Future<void> requestPermissions() async {
     final status = await [
@@ -153,27 +157,18 @@ class QuizController extends GetxController {
     if (status[Permission.bluetooth]!.isGranted &&
         status[Permission.bluetoothScan]!.isGranted &&
         status[Permission.bluetoothConnect]!.isGranted) {
-      log("Permisos de Bluetooth concedidos.");
+      log("Permisos concedidos.");
     } else {
-      log("Faltan permisos de Bluetooth.");
-      Get.snackbar("Permisos",
-          "Debe conceder los permisos de Bluetooth para continuar.");
+      Get.snackbar("Permisos", "Se requieren permisos de Bluetooth.");
     }
   }
 
-  // Cargar dispositivos emparejados
   void initializeBondedDevices() async {
     try {
       List<BluetoothDevice> devices =
           await FlutterBluetoothSerial.instance.getBondedDevices();
-      if (devices.isNotEmpty) {
-        bondedDevices.value = devices;
-        log("Dispositivos emparejados: ${bondedDevices.map((d) => d.name).toList()}");
-      } else {
-        log("No hay dispositivos emparejados.");
-        Get.snackbar(
-            "Bluetooth", "No se encontraron dispositivos emparejados.");
-      }
+      bondedDevices.value = devices;
+      log("Dispositivos emparejados: ${bondedDevices.map((d) => d.name).toList()}");
     } catch (e) {
       log("Error al obtener dispositivos emparejados: $e");
       Get.snackbar(
@@ -181,13 +176,11 @@ class QuizController extends GetxController {
     }
   }
 
-  // Escanear dispositivos cercanos
   void startDiscovery() {
     isScanning.value = true;
     discoveredDevices.clear();
 
     FlutterBluetoothSerial.instance.startDiscovery().listen((result) {
-      // Evitar duplicados
       if (!discoveredDevices
           .any((device) => device.device.address == result.device.address)) {
         discoveredDevices.add(result);
@@ -202,7 +195,7 @@ class QuizController extends GetxController {
     try {
       connection = await BluetoothConnection.toAddress(address);
       isConnected.value = true;
-      log("Conectado al HC-05 ($address)");
+      log("Conectado al dispositivo Bluetooth.");
 
       connection!.input!.listen((data) {
         log("Datos recibidos: ${utf8.decode(data)}");
@@ -211,17 +204,40 @@ class QuizController extends GetxController {
         log("Conexión cerrada.");
       });
     } catch (e) {
-      log("Error al conectar al HC-05: $e");
-      Get.snackbar("Error", "No se pudo conectar al HC-05.");
+      log("Error al conectar: $e");
+      Get.snackbar("Error", "No se pudo conectar al dispositivo.");
     }
   }
 
-  void sendDataToHC05(String data) {
-    if (connection != null && connection!.isConnected) {
-      connection!.output.add(utf8.encode(data + "\r\n"));
-      log("Datos enviados al HC-05: $data");
-    } else {
-      log("No hay conexión activa con el HC-05");
+  Future<bool> sendDataToArduinoAndValidate(String answer) async {
+    if (connection == null || !connection!.isConnected) {
+      log("No hay conexión activa con el Arduino.");
+      return false;
+    }
+
+    try {
+      connection!.output.add(utf8.encode(answer + "\r\n"));
+      await connection!.output.allSent;
+
+      final completer = Completer<bool>();
+      connection!.input!.listen((data) {
+        String response = utf8.decode(data).trim();
+        log("Respuesta del Arduino: $response");
+
+        if (response.toLowerCase() == "true") {
+          completer.complete(true);
+        } else if (response.toLowerCase() == "false") {
+          completer.complete(false);
+        }
+      }).onError((error) {
+        log("Error: $error");
+        completer.complete(false);
+      });
+
+      return completer.future;
+    } catch (e) {
+      log("Error al enviar datos: $e");
+      return false;
     }
   }
 

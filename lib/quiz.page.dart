@@ -29,24 +29,16 @@ class QuizPageState extends State<QuizPage> {
 
   Future<void> _initializeApp() async {
     try {
-      await requestPermissions(); // Solicita permisos
-      await controller.loadQuestions(); // Carga las preguntas
+      await requestPermissions(); // Solicitar permisos
+      await controller.loadQuestions(); // Cargar preguntas
     } catch (e) {
-      log("Error en la inicialización de la app: $e");
+      log("Error en la inicialización: $e");
       Get.snackbar("Error", "No se pudo inicializar la aplicación.");
     }
   }
 
   Future<void> requestPermissions() async {
     try {
-      if (await Permission.bluetooth.isGranted &&
-          await Permission.bluetoothScan.isGranted &&
-          await Permission.bluetoothConnect.isGranted &&
-          await Permission.locationWhenInUse.isGranted) {
-        log("Todos los permisos ya están concedidos.");
-        return; // Salir si los permisos ya están concedidos
-      }
-
       final status = await [
         Permission.bluetooth,
         Permission.bluetoothScan,
@@ -54,24 +46,17 @@ class QuizPageState extends State<QuizPage> {
         Permission.locationWhenInUse,
       ].request();
 
-      if (status[Permission.bluetooth]!.isDenied ||
-          status[Permission.bluetoothScan]!.isDenied ||
-          status[Permission.bluetoothConnect]!.isDenied) {
-        Get.snackbar(
-          "Permiso requerido",
-          "La aplicación necesita acceso a Bluetooth para funcionar correctamente.",
-        );
-      }
-
-      if (status[Permission.locationWhenInUse]!.isDenied) {
-        Get.snackbar(
-          "Permiso requerido",
-          "Se necesita acceso a la ubicación para detectar dispositivos Bluetooth.",
-        );
+      if (status[Permission.bluetooth]!.isGranted &&
+          status[Permission.bluetoothScan]!.isGranted &&
+          status[Permission.bluetoothConnect]!.isGranted) {
+        log("Permisos de Bluetooth concedidos.");
+      } else {
+        log("Permisos faltantes.");
+        Get.snackbar("Permisos", "Se requieren permisos de Bluetooth.");
       }
     } catch (e) {
       log("Error al solicitar permisos: $e");
-      Get.snackbar("Error", "Ocurrió un error al solicitar permisos.");
+      Get.snackbar("Error", "Error al solicitar permisos.");
     }
   }
 
@@ -81,111 +66,110 @@ class QuizPageState extends State<QuizPage> {
     super.dispose();
   }
 
-  void updateTime() {
-    setState(() {});
-  }
-
-  void onTimeUp() {
-    controller.nextQuestion(onGameFinished: showResult);
-  }
-
-  void togglePause() {
-    if (!controller.isConnected.value) {
-      showWarning(
-          "Debe conectarse a un dispositivo Bluetooth para iniciar el juego.");
-      return;
-    }
-    controller.togglePause();
-    setState(() {
-      headerText = controller.isPaused.value
-          ? "BLITO PREGUNTA"
-          : "Equipo ${controller.currentTeam.value}";
-    });
-    if (!controller.isPaused.value) {
-      controller.startTimer(updateTime, onTimeUp);
-    }
-  }
-
-  void resetGame() {
-    controller.resetGame();
-    setState(() {
-      headerText = "BLITO PREGUNTA";
-    });
-  }
-
-  void checkAnswer(String answer) {
+  /// Método para manejar las respuestas del usuario
+  void checkAnswer(String answer) async {
     if (!controller.isConnected.value) {
       showWarning("Debe conectarse a un dispositivo Bluetooth.");
       return;
     }
 
-    controller.checkAnswer(answer, () {
-      showWaitingForArduino();
-      controller.nextQuestion(onGameFinished: showResult);
-    });
-  }
+    controller.isPaused.value = true; // Pausar el juego
+    showWaitingForArduino(); // Mostrar modal de espera
 
-  void showResult() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Resultados"),
-          content: Obx(() => Text(
-              "Puntuación Equipo A: ${controller.scoreA.value}\nPuntuación Equipo B: ${controller.scoreB.value}")),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                resetGame();
-              },
-              child: Text(
-                "Jugar de nuevo",
-                style: TextStyle(color: neutralColor),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    // Enviar la respuesta al Arduino y esperar la respuesta
+    final isCorrect = await controller.sendDataToArduinoAndValidate(answer);
+
+    // Actualizar puntaje y mostrar el resultado
+    Navigator.pop(context); // Cerrar el modal de espera
+    showResultModal(isCorrect);
+
+    // Avanzar a la siguiente pregunta
+    controller.nextQuestion(onGameFinished: showFinalResults);
+    controller.isPaused.value = false; // Reanudar el juego
   }
 
   void showWarning(String message) {
-    Get.defaultDialog(
-      title: "Advertencia",
-      middleText: message,
-      textConfirm: "Aceptar",
-      onConfirm: () => Get.back(),
+    Get.snackbar(
+      "Advertencia",
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      margin: const EdgeInsets.all(10),
     );
   }
 
+  /// Mostrar modal de espera mientras se valida con Arduino
   void showWaitingForArduino() {
     Get.defaultDialog(
       barrierDismissible: false,
       title: "Esperando respuesta",
-      middleText: "Esperando respuesta del Arduino...",
+      middleText: "Esperando validación del Arduino...",
     );
   }
 
-  Future<void> showBluetoothDevices() async {
+  /// Mostrar modal de resultado (Correcto o Incorrecto)
+  void showResultModal(bool isCorrect) {
+    Get.defaultDialog(
+      title: isCorrect ? "¡Correcto!" : "Incorrecto",
+      middleText: isCorrect
+          ? "La respuesta es correcta. ¡Buen trabajo!"
+          : "La respuesta es incorrecta. Inténtalo nuevamente.",
+      textConfirm: "Continuar",
+      onConfirm: () => Get.back(),
+    );
+  }
+
+  /// Mostrar resultados finales al terminar el juego
+  void showFinalResults() {
+    Get.defaultDialog(
+      title: "Resultados Finales",
+      middleText:
+          "Equipo A: ${controller.scoreA.value} puntos\nEquipo B: ${controller.scoreB.value} puntos",
+      textConfirm: "Reiniciar Juego",
+      onConfirm: () {
+        controller.resetGame();
+        Get.back();
+      },
+    );
+  }
+
+  /// Mostrar dispositivos Bluetooth disponibles
+  Future<void> showBluetoothDevices(BuildContext context) async {
     controller.startDiscovery();
-    showModalBottomSheet(
+
+    await showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
         return Obx(() {
           if (controller.isScanning.value) {
             return const Center(child: CircularProgressIndicator());
           }
+
+          if (controller.discoveredDevices.isEmpty) {
+            return const Center(
+              child: Text(
+                "No se encontraron dispositivos cercanos.\nAsegúrese de que Bluetooth esté activado.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            );
+          }
+
           return ListView.builder(
             itemCount: controller.discoveredDevices.length,
             itemBuilder: (context, index) {
               final device = controller.discoveredDevices[index].device;
+
               return ListTile(
                 title: Text(device.name ?? "Dispositivo sin nombre"),
                 subtitle: Text(device.address),
-                onTap: () {
-                  controller.connectToHC05(device.address);
+                leading: const Icon(Icons.bluetooth),
+                onTap: () async {
+                  controller.isScanning.value = false;
                   Navigator.pop(context);
+
+                  await connectToDevice(device.address);
                 },
               );
             },
@@ -193,6 +177,33 @@ class QuizPageState extends State<QuizPage> {
         });
       },
     );
+  }
+
+  /// Método para conectar a un dispositivo Bluetooth seleccionado
+  Future<void> connectToDevice(String address) async {
+    try {
+      controller.connectToHC05(address);
+      if (controller.isConnected.value) {
+        Get.snackbar(
+          "Conexión exitosa",
+          "Se conectó correctamente al dispositivo.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else {
+        throw Exception("La conexión no se pudo establecer.");
+      }
+    } catch (e) {
+      log("Error al conectar: $e");
+      Get.snackbar(
+        "Error de conexión",
+        "No se pudo conectar al dispositivo. Verifique que esté encendido y accesible.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   @override
@@ -237,7 +248,7 @@ class QuizPageState extends State<QuizPage> {
                       right: 16,
                       bottom: -4,
                       child: IconButton(
-                        onPressed: showBluetoothDevices,
+                        onPressed: () => showBluetoothDevices(context),
                         icon: Icon(
                           Icons.bluetooth,
                           color: controller.isConnected.value
@@ -262,18 +273,13 @@ class QuizPageState extends State<QuizPage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16.0),
                         border: Border.all(color: activeColor, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.4),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
                       ),
                       child: Text(
                         question["question"],
                         style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -339,7 +345,7 @@ class QuizPageState extends State<QuizPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
                       child: ElevatedButton(
-                        onPressed: togglePause,
+                        onPressed: controller.togglePause,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16.0),
                           backgroundColor: Colors.white,
