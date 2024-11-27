@@ -1,0 +1,87 @@
+[
+	{
+		"question": "¿De dónde proviene el Principito?",
+		"options": [
+			"De la Tierra",
+			"De un asteroide",
+			"De un planeta gigante",
+			"De la Luna"
+		],
+		"answer": "De un asteroide"
+	},
+	{
+		"question": "¿Qué simboliza la rosa en la historia?",
+		"options": ["La amistad", "La sabiduría", "El amor", "La valentía"],
+		"answer": "El amor"
+	},
+	{
+		"question": "¿Cuál es el trabajo del primer adulto que el Principito encuentra en su viaje?",
+		"options": ["Un rey", "Un contador", "Un geógrafo", "Un farolero"],
+		"answer": "Un rey"
+	},
+	{
+		"question": "¿Por qué el Principito decide abandonar su planeta?",
+		"options": [
+			"Porque está aburrido",
+			"Porque busca aprender cosas nuevas",
+			"Porque se siente solo",
+			"Porque no quiere cuidar a su rosa"
+		],
+		"answer": "Porque busca aprender cosas nuevas"
+	},
+	{
+		"question": "¿Qué significa \"domesticar\" según el zorro?",
+		"options": [
+			"Hacer que alguien obedezca",
+			"Crear lazos de amistad",
+			"Convertirse en un líder",
+			"Ser diferente a los demás"
+		],
+		"answer": "Crear lazos de amistad"
+	},
+	{
+		"question": "¿Qué dibujo le pide el Principito al narrador cuando lo conoce?",
+		"options": ["Un león", "Un avión", "Un cordero", "Una estrella"],
+		"answer": "Un cordero"
+	},
+	{
+		"question": "¿Qué representa el baobab en la historia?",
+		"options": [
+			"La amistad",
+			"Los problemas que deben resolverse a tiempo",
+			"La naturaleza",
+			"La creatividad"
+		],
+		"answer": "Los problemas que deben resolverse a tiempo"
+	},
+	{
+		"question": "¿Qué personaje vive solo en su planeta y enciende un farol constantemente?",
+		"options": [
+			"El rey",
+			"El hombre de negocios",
+			"El geógrafo",
+			"El farolero"
+		],
+		"answer": "El farolero"
+	},
+	{
+		"question": "¿Qué piensa el Principito sobre los adultos?",
+		"options": [
+			"Que son muy sabios",
+			"Que son complicados y no entienden lo esencial",
+			"Que son fuertes y protectores",
+			"Que son divertidos y alegres"
+		],
+		"answer": "Que son complicados y no entienden lo esencial"
+	},
+	{
+		"question": "¿Qué aprende el Principito de su viaje por los diferentes planetas?",
+		"options": [
+			"Que debe alejarse de su planeta",
+			"Que los adultos siempre tienen razón",
+			"Que lo más importante es invisible a los ojos",
+			"Que la riqueza es lo más valioso"
+		],
+		"answer": "Que lo más importante es invisible a los ojos"
+	}
+]
